@@ -1,9 +1,18 @@
+"""
+Transcript formatting, paragraph reconstruction, and context chunking module.
+
+Converts raw caption snippet fragments into continuous paragraphs and outputs 
+Markdown, LLM XML, Plain Text, JSON, JSONL, SRT, and WebVTT formats.
+
+Author: Pradumon Sahani
+"""
+
 import json
-import math
 import re
 from typing import List, Dict, Any, Optional
 from yt_transcript.extractor import VideoMetadata, TranscriptItem
 from yt_transcript.utils import format_timestamp, estimate_tokens
+
 
 def reconstruct_paragraphs(
     items: List[TranscriptItem],
@@ -11,8 +20,19 @@ def reconstruct_paragraphs(
     max_paragraph_words: int = 120
 ) -> List[Dict[str, Any]]:
     """
-    Reconstruct raw transcript snippet fragments into readable paragraphs.
-    Groups lines based on speaker pauses (time gap > max_pause_sec) or sentence endings.
+    Reconstruct raw caption line fragments into continuous, readable paragraphs.
+
+    Groups fragments based on speech pauses (time gap > max_pause_sec) or 
+    sentence-ending punctuation.
+
+    Args:
+        items (List[TranscriptItem]): Raw transcript item snippets.
+        max_pause_sec (float): Pause threshold in seconds to trigger a paragraph break.
+        max_paragraph_words (int): Maximum words per paragraph block.
+
+    Returns:
+        List[Dict[str, Any]]: List of reconstructed paragraph dictionaries containing
+            'start', 'timestamp', and 'text'.
     """
     if not items:
         return []
@@ -57,7 +77,11 @@ def reconstruct_paragraphs(
 
     return paragraphs
 
+
 class TranscriptFormatter:
+    """
+    Formatter class responsible for rendering transcript data into specific output styles.
+    """
     def __init__(self, metadata: VideoMetadata, items: List[TranscriptItem]):
         self.metadata = metadata
         self.items = items
@@ -65,7 +89,13 @@ class TranscriptFormatter:
 
     def filter_by_search(self, query: str) -> List[Dict[str, Any]]:
         """
-        Filter paragraphs to only those matching the search query (case-insensitive).
+        Filter transcript paragraphs to those containing the search query string.
+
+        Args:
+            query (str): Search keyword or phrase.
+
+        Returns:
+            List[Dict[str, Any]]: Filtered list of paragraph dictionaries.
         """
         if not query:
             return self.paragraphs
@@ -85,17 +115,25 @@ class TranscriptFormatter:
         search_query: Optional[str] = None
     ) -> str:
         """
-        Format transcript into requested format:
-        markdown, llm, text, json, jsonl, srt, vtt
+        Format the transcript into the requested output format style.
+
+        Args:
+            output_format (str): Desired output style (markdown, llm, text, json, jsonl, srt, vtt).
+            include_timestamps (bool): Include timestamp labels in Markdown/Text formats.
+            include_metadata (bool): Include title/URL metadata block in Markdown output.
+            search_query (Optional[str]): Keyword query to filter and highlight.
+
+        Returns:
+            str: Formatted string ready for file output or display.
         """
         target_paragraphs = self.filter_by_search(search_query) if search_query else self.paragraphs
         
         fmt = output_format.lower()
-        if fmt == "markdown" or fmt == "md":
+        if fmt in ["markdown", "md"]:
             return self._format_markdown(target_paragraphs, include_timestamps, include_metadata, search_query)
-        elif fmt == "llm" or fmt == "prompt":
+        elif fmt in ["llm", "prompt"]:
             return self._format_llm(target_paragraphs)
-        elif fmt == "text" or fmt == "txt":
+        elif fmt in ["text", "txt"]:
             return self._format_text(target_paragraphs, include_timestamps)
         elif fmt == "json":
             return self._format_json(target_paragraphs)
@@ -108,7 +146,13 @@ class TranscriptFormatter:
         else:
             raise ValueError(f"Unsupported output format: '{output_format}'.")
 
-    def _format_markdown(self, paragraphs: List[Dict[str, Any]], include_timestamps: bool, include_metadata: bool, search_query: Optional[str]) -> str:
+    def _format_markdown(
+        self,
+        paragraphs: List[Dict[str, Any]],
+        include_timestamps: bool,
+        include_metadata: bool,
+        search_query: Optional[str]
+    ) -> str:
         full_text = " ".join(p["text"] for p in paragraphs)
         word_count = len(full_text.split())
         tokens = estimate_tokens(full_text)
@@ -129,7 +173,6 @@ class TranscriptFormatter:
         for p in paragraphs:
             text = p["text"]
             if search_query:
-                # Highlight query terms in bold yellow markdown syntax
                 pattern = re.compile(f"({re.escape(search_query)})", re.IGNORECASE)
                 text = pattern.sub(r"**\1**", text)
 
@@ -223,9 +266,18 @@ class TranscriptFormatter:
         millis = int((seconds - int(seconds)) * 1000)
         return f"{hrs:02d}:{mins:02d}:{secs:02d}.{millis:03d}"
 
+
 def chunk_text(text: str, chunk_tokens: int = 2000, overlap_tokens: int = 200) -> List[str]:
     """
-    Split text into chunks based on estimated token size with overlapping context.
+    Split text into chunks based on estimated LLM token size with overlapping context.
+
+    Args:
+        text (str): Input full transcript text.
+        chunk_tokens (int): Maximum estimated tokens per chunk.
+        overlap_tokens (int): Overlap tokens between consecutive chunks.
+
+    Returns:
+        List[str]: List of text chunk strings.
     """
     words = text.split()
     if not words:

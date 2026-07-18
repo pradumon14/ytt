@@ -1,3 +1,9 @@
+"""
+Main Command Line Interface (CLI) entry point for ytt (yt-transcript).
+
+Author: Pradumon Sahani
+"""
+
 import os
 import sys
 import argparse
@@ -24,10 +30,17 @@ from yt_transcript.completions import generate_completion
 
 console = Console()
 
+
 def build_parser() -> argparse.ArgumentParser:
+    """
+    Build argparse argument parser for ytt CLI options.
+
+    Returns:
+        argparse.ArgumentParser: Configured argument parser object.
+    """
     parser = argparse.ArgumentParser(
         prog="ytt",
-        description=f"Extract, clean, and format YouTube video & playlist transcripts for LLMs, documentation, and RAG context.\nDeveloper: {__author__}",
+        description=f"Extract, clean, and format YouTube video and playlist transcripts for LLMs, documentation, and RAG context.\nDeveloper: {__author__}",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
@@ -128,12 +141,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-v", "--version",
         action="version",
-        version=f"ytt (yt-transcript) v{__version__} — Developer: {__author__}"
+        version=f"ytt (yt-transcript) v{__version__} - Developer: {__author__}"
     )
 
     return parser
 
+
 def main():
+    """
+    CLI main function handling argument parsing, playlist/video fetching, 
+    formatting, output rendering, and clipboard operations.
+    """
     if len(sys.argv) > 1:
         cmd = sys.argv[1].lower()
         if cmd in ["manual", "man", "guide"]:
@@ -168,7 +186,7 @@ def main():
     for pl in playlists:
         pl_title = pl.get('title', 'Playlist')
         if not args.quiet:
-            console.print(f"[bold magenta]📋 Found Playlist:[/] [bold]{pl_title}[/] ({len(pl.get('videos', []))} videos)")
+            console.print(f"[bold magenta][Playlist][/] [bold]{pl_title}[/] ({len(pl.get('videos', []))} videos)")
         for v in pl.get('videos', []):
             all_video_items.append({
                 'index': v.get('index'),
@@ -219,7 +237,7 @@ def main():
         v_id = item['id']
         try:
             if not args.quiet:
-                prefix = f"[{idx}/{len(all_video_items)}]" if len(all_video_items) > 1 else "▶"
+                prefix = f"[{idx}/{len(all_video_items)}]" if len(all_video_items) > 1 else "[*]"
                 console.print(f"[bold blue]{prefix} Processing Video:[/] {v_id} ({item['title']})")
 
             with Progress(
@@ -250,7 +268,6 @@ def main():
                 search_query=args.search
             )
 
-            # Apply prompt template if requested
             if args.template:
                 formatted_content = apply_template(formatted_content, args.template)
 
@@ -263,7 +280,6 @@ def main():
                 section_header = f"\n\n# Video {idx}: {metadata.title}\n" if len(all_video_items) > 1 else ""
                 combined_outputs.append(section_header + formatted_content)
             else:
-                # Handle individual output
                 if args.output:
                     out_dir = args.output
                     if not out_dir.endswith("/") and not os.path.isdir(out_dir):
@@ -278,7 +294,7 @@ def main():
                         f.write(formatted_content)
 
                     if not args.quiet:
-                        console.print(f"[bold green]✓ Saved:[/] {filepath} ({word_count:,} words)")
+                        console.print(f"[bold green][Saved][/] {filepath} ({word_count:,} words)")
                 else:
                     if not args.quiet:
                         console.print(Panel(
@@ -302,7 +318,6 @@ def main():
         except Exception as e:
             console.print(f"[bold red]Error processing video '{v_id}':[/] {e}", file=sys.stderr)
 
-    # Write combined output if requested
     if is_combining and combined_outputs:
         final_combined = "\n\n---\n\n".join(combined_outputs)
         
@@ -324,7 +339,7 @@ def main():
 
             if not args.quiet:
                 console.print(Panel(
-                    f"[bold green]✓ Combined transcripts saved successfully![/]\n"
+                    f"[bold green]Combined transcripts saved successfully.[/]\n"
                     f"[bold]Total Videos Processed:[/] {len(all_video_items)}\n"
                     f"[bold]Output File:[/] [link=file://{os.path.abspath(out_file)}]{out_file}[/link]\n"
                     f"[bold]Combined Stats:[/] {total_words:,} words | ~{total_tokens:,} LLM tokens\n"
@@ -354,7 +369,8 @@ def main():
         if args.copy:
             if copy_to_clipboard(final_combined):
                 if not args.quiet:
-                    console.print("[bold green]📋 Copied combined transcript to system clipboard![/]")
+                    console.print("[bold green][Copied] Combined transcript copied to system clipboard.[/]")
+
 
 if __name__ == "__main__":
     main()

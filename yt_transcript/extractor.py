@@ -1,18 +1,30 @@
+"""
+YouTube metadata and transcript extraction engine.
+
+Handles primary caption retrieval via youtube-transcript-api and fallback 
+subtitles downloading via yt-dlp.
+
+Author: Pradumon Sahani
+"""
+
 import json
 import requests
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
-    InvalidVideoId,
-    YouTubeTranscriptApiException
+    InvalidVideoId
 )
+
 
 @dataclass
 class VideoMetadata:
+    """
+    Data structure representing YouTube video metadata.
+    """
     video_id: str
     title: str
     author: str
@@ -21,20 +33,33 @@ class VideoMetadata:
     thumbnail_url: str = ""
     duration: float = 0.0
 
+
 @dataclass
 class TranscriptItem:
+    """
+    Data structure representing an individual transcript segment snippet.
+    """
     text: str
     start: float
     duration: float
 
+
 class TranscriptExtractor:
+    """
+    Extractor class responsible for fetching video metadata and transcript snippets.
+    """
     def __init__(self):
         self.api = YouTubeTranscriptApi()
 
     def get_metadata(self, video_id: str) -> VideoMetadata:
         """
-        Fetch video metadata using YouTube oEmbed endpoint (fast and reliable).
-        Falls back to default metadata if endpoint is unavailable.
+        Fetch video title, author, and channel details via YouTube oEmbed API.
+
+        Args:
+            video_id (str): 11-character YouTube Video ID.
+
+        Returns:
+            VideoMetadata: Object containing video details.
         """
         url = f"https://www.youtube.com/watch?v={video_id}"
         oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
@@ -63,7 +88,13 @@ class TranscriptExtractor:
 
     def list_languages(self, video_id: str) -> List[Dict[str, Any]]:
         """
-        List available transcript languages for a video.
+        List available manual and auto-generated transcript languages for a video.
+
+        Args:
+            video_id (str): 11-character YouTube Video ID.
+
+        Returns:
+            List[Dict[str, Any]]: List of dictionaries detailing language options.
         """
         try:
             transcript_list = self.api.list(video_id)
@@ -86,27 +117,32 @@ class TranscriptExtractor:
         translate_to: Optional[str] = None
     ) -> List[TranscriptItem]:
         """
-        Fetch transcript snippets for a video.
-        - languages: priority list of language codes (e.g. ['en', 'es'])
-        - translate_to: language code to translate into
+        Fetch transcript snippets for a video with language selection and translation.
+
+        Args:
+            video_id (str): 11-character YouTube Video ID.
+            languages (Optional[List[str]]): List of preferred language codes.
+            translate_to (Optional[str]): Target language code for translation.
+
+        Returns:
+            List[TranscriptItem]: Parsed list of transcript item snippets.
+
+        Raises:
+            RuntimeError: If transcripts are disabled, missing, or unavailable.
         """
         if languages is None:
             languages = ['en']
 
         try:
             transcript_list = self.api.list(video_id)
-            
             selected_transcript = None
             
-            # 1. Try finding specified languages (manual or auto)
             try:
                 selected_transcript = transcript_list.find_transcript(languages)
             except Exception:
-                # 2. Fallback: try finding generated transcript or any available transcript
                 try:
                     selected_transcript = transcript_list.find_generated_transcript(languages)
                 except Exception:
-                    # Pick the first available transcript if none match exact language request
                     available = list(transcript_list)
                     if available:
                         selected_transcript = available[0]
@@ -114,7 +150,6 @@ class TranscriptExtractor:
             if not selected_transcript:
                 raise NoTranscriptFound(video_id, languages, transcript_list)
 
-            # Check if user requested translation
             if translate_to:
                 if selected_transcript.is_translatable:
                     selected_transcript = selected_transcript.translate(translate_to)
@@ -125,7 +160,6 @@ class TranscriptExtractor:
             
             items = []
             for s in raw_snippets:
-                # Clean html entities or raw line breaks
                 clean_text = s.text.replace("\n", " ").strip()
                 items.append(TranscriptItem(
                     text=clean_text,
@@ -143,13 +177,19 @@ class TranscriptExtractor:
             raise RuntimeError(f"Video '{video_id}' is unavailable or private.")
         except InvalidVideoId:
             raise RuntimeError(f"Invalid Video ID '{video_id}'.")
-        except Exception as e:
-            # Attempt yt-dlp fallback if YouTubeTranscriptApi encounters an unexpected error
+        except Exception:
             return self._fetch_fallback_ytdlp(video_id, languages)
 
     def _fetch_fallback_ytdlp(self, video_id: str, languages: List[str]) -> List[TranscriptItem]:
         """
-        Fallback transcript extractor using yt-dlp subtitle download.
+        Fallback transcript extractor using yt-dlp automatic subtitle download.
+
+        Args:
+            video_id (str): 11-character YouTube Video ID.
+            languages (List[str]): List of preferred language codes.
+
+        Returns:
+            List[TranscriptItem]: Extracted transcript items.
         """
         import yt_dlp
         url = f"https://www.youtube.com/watch?v={video_id}"
@@ -169,13 +209,11 @@ class TranscriptExtractor:
                 if not subtitles:
                     raise RuntimeError("No subtitles found via yt-dlp fallback.")
                 
-                # Pick best matching language
                 target_lang = languages[0] if languages else 'en'
                 sub_tracks = subtitles.get(target_lang) or next(iter(subtitles.values()), None)
                 if not sub_tracks:
                     raise RuntimeError(f"No subtitles track found for {target_lang}")
 
-                # Find json3 or vtt format
                 json_track = next((t for t in sub_tracks if t.get('ext') == 'json3'), None)
                 if json_track:
                     resp = requests.get(json_track['url'], timeout=10)

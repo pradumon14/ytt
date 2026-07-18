@@ -1,17 +1,40 @@
+"""
+Utility functions for YouTube video ID extraction, playlist resolution, timestamp 
+formatting, LLM token estimation, string sanitization, and system clipboard integration.
+
+Author: Pradumon Sahani
+"""
+
 import os
 import re
 import subprocess
 import shutil
 from typing import List, Dict, Any, Tuple
 
+
 def is_playlist_url(url_or_id: str) -> bool:
-    """Check if the given input string is a YouTube Playlist URL."""
+    """
+    Determine whether the input string represents a YouTube Playlist URL.
+
+    Args:
+        url_or_id (str): Input URL or ID string to check.
+
+    Returns:
+        bool: True if input contains playlist markers, False otherwise.
+    """
     url_or_id = url_or_id.strip()
     return "list=" in url_or_id or "/playlist" in url_or_id
 
+
 def extract_playlist_videos(playlist_url: str) -> Dict[str, Any]:
     """
-    Extract playlist title and video entries (IDs and titles) using yt-dlp.
+    Extract playlist metadata and constituent video entries using yt-dlp.
+
+    Args:
+        playlist_url (str): Valid YouTube playlist URL.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing 'title' and 'videos' list.
     """
     import yt_dlp
     ydl_opts = {
@@ -36,13 +59,29 @@ def extract_playlist_videos(playlist_url: str) -> Dict[str, Any]:
             'videos': videos
         }
 
+
 def extract_video_id(url_or_id: str) -> str:
     """
-    Extract 11-character YouTube video ID from various URL formats or raw ID.
+    Extract the standard 11-character YouTube video ID from various URL formats or raw ID.
+
+    Supported formats:
+    - Standard URL: https://www.youtube.com/watch?v=VIDEO_ID
+    - Short URL: https://youtu.be/VIDEO_ID
+    - Shorts URL: https://www.youtube.com/shorts/VIDEO_ID
+    - Embed URL: https://www.youtube.com/embed/VIDEO_ID
+    - Raw ID: VIDEO_ID (11 characters)
+
+    Args:
+        url_or_id (str): Input string containing URL or ID.
+
+    Returns:
+        str: 11-character YouTube Video ID.
+
+    Raises:
+        ValueError: If video ID cannot be parsed from the input.
     """
     url_or_id = url_or_id.strip()
     
-    # If raw 11-character ID
     if len(url_or_id) == 11 and re.match(r'^[a-zA-Z0-9_-]{11}$', url_or_id):
         return url_or_id
         
@@ -59,10 +98,18 @@ def extract_video_id(url_or_id: str) -> str:
             
     raise ValueError(f"Invalid YouTube URL or Video ID: '{url_or_id}'")
 
+
 def parse_inputs(inputs: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
-    Parse input strings (URLs, Video IDs, Playlists, or Files).
-    Returns a tuple of (direct_video_ids, list_of_playlists).
+    Parse command-line inputs including URLs, Video IDs, Playlists, and local URL list files.
+
+    Args:
+        inputs (List[str]): Input strings passed via CLI arguments.
+
+    Returns:
+        Tuple[List[str], List[Dict[str, Any]]]: Tuple containing:
+            - List of individual video IDs.
+            - List of resolved playlist metadata dictionaries.
     """
     video_ids = []
     playlists = []
@@ -72,7 +119,6 @@ def parse_inputs(inputs: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]:
         if not item:
             continue
             
-        # 1. Check if playlist URL
         if is_playlist_url(item):
             try:
                 p_info = extract_playlist_videos(item)
@@ -81,7 +127,6 @@ def parse_inputs(inputs: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]:
                 print(f"Warning: Could not extract playlist '{item}': {e}")
             continue
 
-        # 2. Check if item is a local text file containing URLs
         if os.path.isfile(item):
             with open(item, 'r', encoding='utf-8') as f:
                 for line in f:
@@ -110,14 +155,32 @@ def parse_inputs(inputs: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]:
                 
     return video_ids, playlists
 
+
 def sanitize_filename(name: str) -> str:
-    """Sanitize title string for safe filesystem usage."""
+    """
+    Sanitize input title string for safe file naming across all filesystems.
+
+    Args:
+        name (str): Original title string.
+
+    Returns:
+        str: Sanitized filename safe for disk creation.
+    """
     name = re.sub(r'[\\/*?:"<>|]', '', name)
     name = re.sub(r'\s+', '_', name).strip('_')
     return name[:80] or "transcript"
 
+
 def format_timestamp(seconds: float) -> str:
-    """Convert float seconds to HH:MM:SS or MM:SS string."""
+    """
+    Convert numerical seconds into formatted HH:MM:SS or MM:SS timestamp string.
+
+    Args:
+        seconds (float): Time offset in seconds.
+
+    Returns:
+        str: Formatted timestamp string.
+    """
     total_sec = int(seconds)
     hours = total_sec // 3600
     minutes = (total_sec % 3600) // 60
@@ -128,9 +191,17 @@ def format_timestamp(seconds: float) -> str:
     else:
         return f"{minutes:02d}:{secs:02d}"
 
+
 def estimate_tokens(text: str) -> int:
     """
-    Estimate token count for LLMs (GPT/Claude/Gemini).
+    Estimate Large Language Model (LLM) token count for input text.
+    Uses hybrid character and word length ratio heuristic (~4 chars/token, ~0.75 words/token).
+
+    Args:
+        text (str): Input text content.
+
+    Returns:
+        int: Estimated token count.
     """
     if not text:
         return 0
@@ -139,8 +210,18 @@ def estimate_tokens(text: str) -> int:
     word_estimate = len(words) / 0.75
     return int((char_estimate + word_estimate) / 2)
 
+
 def copy_to_clipboard(text: str) -> bool:
-    """Attempts to copy text to system clipboard."""
+    """
+    Copy text to system clipboard across supported platforms:
+    Termux, Linux (xclip/xsel/wl-copy), macOS (pbcopy), Windows, or pyperclip fallback.
+
+    Args:
+        text (str): Text content to copy.
+
+    Returns:
+        bool: True if successfully copied, False otherwise.
+    """
     if shutil.which("termux-clipboard-set"):
         try:
             p = subprocess.Popen(["termux-clipboard-set"], stdin=subprocess.PIPE)
