@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-transcript-cli"
+version = "1.0.0"
+description = "CLI tool to extract, format, and prepare YouTube video transcripts for LLMs and documentation"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "youtube-transcript-api>=1.2.0",
+    "rich>=13.0.0",
+    "requests>=2.25.0",
+    "yt-dlp>=2023.1.0"
+]
+
+[project.scripts]
+ytt = "yt_transcript.cli:main"
+ytx = "yt_transcript.cli:main"
+yt-transcript = "yt_transcript.cli:main"
+yt2text = "yt_transcript.cli:main"
+yt2md = "yt_transcript.cli:main"
